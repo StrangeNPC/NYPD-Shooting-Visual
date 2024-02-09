@@ -1,0 +1,180 @@
+---
+title: "NYPD Shootings Analysis"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+ 
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(ggmap)
+library(ggplot2)
+library(ggmap)
+Sys.setenv(LANGUAGE = "en")
+
+
+url_NYPD <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+NYPD <- read.csv(url_NYPD)
+```
+
+```{r}
+NYPD_clean <- NYPD %>%
+  select(c("OCCUR_DATE","OCCUR_TIME","BORO","PRECINCT",
+           "STATISTICAL_MURDER_FLAG","VIC_AGE_GROUP","VIC_SEX","VIC_RACE")) %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE),
+         OCCUR_TIME = hms(OCCUR_TIME),
+         STATISTICAL_MURDER_FLAG = as.logical(STATISTICAL_MURDER_FLAG),
+         Shootings = 1,
+         Year = year(OCCUR_DATE))
+```
+
+```{r}
+NYPD_clean %>%
+  ggplot(aes(x = BORO, fill = BORO)) +
+  geom_bar() +
+  labs(title = "NYPD Shootings Incidents by Borough",
+       subtitle = "(2006 - 2021)",
+       x = "NYC Boroughs",
+       y = "Total Number of Shootings")
+
+
+```
+
+```{r}
+NYPD_clean %>%
+  ggplot(aes(x = Year)) +
+  geom_bar(fill = "lightblue",show.legend = FALSE) +
+  labs(title = "NYPD Shootings Incidents by Year",
+       x = "Years (2006 - 2021)",
+       y = "Total Number of Shootings" )
+  
+
+
+```
+
+```{r}
+NYPD_hourly_boro <- NYPD_clean %>%
+  mutate(Hour = hour(OCCUR_TIME)) %>%
+  group_by(BORO, Hour) %>%
+  summarize(Shootings = sum(Shootings))
+
+NYPD_hourly_boro %>%
+  ggplot(aes(x = Hour, y = Shootings, group = BORO, color = BORO)) +
+  geom_line() +
+  labs(title = "Hourly Distribution of NYPD Shootings by Borough",
+       x = "Hour (24 Hour Time System)",
+       y = "Total Number of Shootings" )
+
+
+```
+
+```{r}
+# Filter out the outlier value (1022) from NYPD_age
+NYPD_age <- NYPD_clean %>%
+  filter(VIC_AGE_GROUP != 1022) %>%
+  group_by(VIC_AGE_GROUP) %>%
+  summarize(Shootings = sum(Shootings))
+
+# Create the age group distribution plot without the outlier
+NYPD_age %>%
+  ggplot(aes(x = VIC_AGE_GROUP, y = Shootings, fill = VIC_AGE_GROUP)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribution of NYPD Shootings by Age Group",
+       x = "Age Group",
+       y = "Total Number of Shootings" )
+
+
+```
+
+```{r}
+# Modify the appearance of the first plot
+ggplot(NYPD_time_day, aes(x = OCCUR_TIME, y = Shootings)) +
+  geom_line(color = "blue", size = 1) +  # Change line color to blue and adjust size
+  scale_x_time(labels = scales::time_format("%H:%M")) +  # Format x-axis labels to show hours and minutes
+  labs(title = "NYPD Shootings by the Time of Day",
+       subtitle = "(2006 - 2021)",
+       x = "Time of day (24 Hour Time System)",
+       y = "Shootings" ) +
+  theme_minimal()  # Use a minimal theme for a cleaner appearance
+
+# Modify the appearance of the second plot
+ggplot(NYPD_time_hour, aes(x = Hour, y = Shootings)) +
+  geom_point(color = "red", size = 3) +  # Change point color to red and adjust size
+  stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1, color = "blue") +  # Change line color to blue
+  labs(title = "NYPD Shootings by Time of Day per Hour",
+       subtitle = "(2006-2021)",
+       x = " Hours (24 Hour Time System)",
+       y = "Shootings that Hour" ) +
+  theme_minimal()  # Use a minimal theme for a cleaner appearance
+
+
+```
+
+
+```{r}
+NYPD_monthly <- NYPD_clean %>%
+  group_by(Year, Month = month(OCCUR_DATE)) %>%
+  summarize(Shootings = sum(Shootings))
+
+NYPD_monthly %>%
+  ggplot(aes(x = Month, y = Shootings, group = Year, color = as.factor(Year))) +
+  geom_line() +
+  labs(title = "Monthly Trends in NYPD Shootings",
+       x = "Month",
+       y = "Total Number of Shootings" )
+
+
+```
+
+```{r}
+ggplot(NYPD, aes(x = VIC_RACE)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(title = "Number of Deaths by Race",
+       x = "Race",
+       y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+
+
+```
+
+```{r}
+# Filter out null, empty, 1020, and 940 values
+NYPD_data_filtered <- NYPD %>%
+  filter(!is.na(PERP_AGE_GROUP) & PERP_AGE_GROUP != "" & PERP_AGE_GROUP != "1020" & PERP_AGE_GROUP != "940" & PERP_AGE_GROUP != "224" & PERP_AGE_GROUP != "(null)")
+
+# Visualization for PERP_AGE_GROUP after filtering
+ggplot(NYPD_data_filtered, aes(x = PERP_AGE_GROUP, fill = PERP_AGE_GROUP)) +
+  geom_bar() +
+  labs(title = "Distribution of Perpetrator Age Groups",
+       x = "Age Group",
+       y = "Count") +
+  theme_minimal()
+
+```
+```{r}
+# Visualization for PERP_SEX
+ggplot(NYPD_data_filtered, aes(x = PERP_SEX, fill = PERP_SEX)) +
+  geom_bar() +
+  labs(title = "Distribution of Perpetrator Sex",
+       x = "Sex",
+       y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+# Visualization for PERP_RACE
+ggplot(NYPD_data_filtered, aes(x = PERP_RACE, fill = PERP_RACE)) +
+  geom_bar() +
+  labs(title = "Distribution of Perpetrator Race",
+       x = "Race",
+       y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
